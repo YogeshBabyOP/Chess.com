@@ -1,5 +1,7 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
+
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
@@ -9,7 +11,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // Serve static files (e.g., your frontend build)
-app.use(express.static('public'));
+// app.use(express.static('public'));
 app.use(express.static(path.join(__dirname, '../chess-tactics-trainer/dist')));
 
 // Catch-all: For any request not handled above, send back the frontend's index.html.
@@ -78,6 +80,8 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+app.get('/health', (req, res) => res.send('OK'));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
