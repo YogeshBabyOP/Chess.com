@@ -4,29 +4,20 @@ import { Chess } from 'chess.js';
 import { io } from 'socket.io-client';
 
 function App() {
-  // Chess game state
   const [chessGame, setChessGame] = useState(new Chess());
   const [moveHistory, setMoveHistory] = useState([]);
   const [status, setStatus] = useState('');
   const [capturedPieces, setCapturedPieces] = useState({ w: [], b: [] });
-  
-  // For highlighting squares (for move hints or checkmate)
   const [highlightedSquares, setHighlightedSquares] = useState({});
-  // For click/tap moves – store the currently selected square
   const [selectedSquare, setSelectedSquare] = useState(null);
-
-  // Lobby & multiplayer state
   const [inLobby, setInLobby] = useState(true);
   const [gameId, setGameId] = useState('');
   const [lobbyGameKey, setLobbyGameKey] = useState('');
-  const [playerColor, setPlayerColor] = useState(''); // 'w' or 'b'
+  const [playerColor, setPlayerColor] = useState('');
   const [error, setError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
-
-  // Socket reference
   const socketRef = useRef(null);
 
-  // --- Helper Functions for Chess.js API Compatibility ---
   const gameIsOver = (game) => {
     if (typeof game.game_over === 'function') return game.game_over();
     if (typeof game.gameOver === 'function') return game.gameOver();
@@ -50,11 +41,9 @@ function App() {
     if (typeof game.isCheck === 'function') return game.isCheck();
     return false;
   };
-  // --- End Helper Functions ---
 
-  // Initialize Socket.IO connection
   useEffect(() => {
-    socketRef.current = io('http://localhost:3000'); // Update URL if needed
+    socketRef.current = io('http://localhost:3000');
     const socket = socketRef.current;
 
     socket.on('gameCreated', ({ gameId, color }) => {
@@ -74,7 +63,6 @@ function App() {
       setInLobby(false);
     });
 
-    // Use functional update so we always work with the latest game state
     socket.on('move', (move) => {
       setChessGame((prevGame) => {
         const newGame = new Chess(prevGame.fen());
@@ -84,7 +72,6 @@ function App() {
       });
       setMoveHistory((prev) => [...prev, move]);
       updateCapturedPieces(move);
-      // Clear any click-based selection and move hints after a move is played
       setSelectedSquare(null);
       setHighlightedSquares({});
     });
@@ -100,16 +87,14 @@ function App() {
     return () => {
       socket.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update game status; if checkmate, highlight the checkmated king.
   const updateGameStatus = useCallback((gameInstance) => {
     if (isCheckmate(gameInstance)) {
-      const losingColor = gameInstance.turn(); // Player to move is checkmated
+      const losingColor = gameInstance.turn();
       let kingSquare = null;
-      const files = ['a','b','c','d','e','f','g','h'];
-      const ranks = ['1','2','3','4','5','6','7','8'];
+      const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
       for (let r = 0; r < ranks.length; r++) {
         for (let f = 0; f < files.length; f++) {
           const square = files[f] + ranks[r];
@@ -122,7 +107,6 @@ function App() {
         if (kingSquare) break;
       }
       if (kingSquare) {
-        // Highlight the checkmated king's square with a solid red background.
         setHighlightedSquares({ [kingSquare]: { backgroundColor: 'rgba(255,0,0,0.8)' } });
       }
       setStatus(`Checkmate! ${losingColor === 'w' ? 'Black' : 'White'} wins!`);
@@ -135,10 +119,9 @@ function App() {
     }
   }, []);
 
-  // Update captured pieces state when a piece is taken.
   const updateCapturedPieces = useCallback((move) => {
     if (move.captured) {
-      setCapturedPieces(prev => {
+      setCapturedPieces((prev) => {
         const capturedColor = move.color === 'w' ? 'b' : 'w';
         return {
           ...prev,
@@ -148,9 +131,7 @@ function App() {
     }
   }, []);
 
-  // onDrop: Allow drag/drop moves only if it is your turn and the piece belongs to you.
   function onDrop(sourceSquare, targetSquare) {
-    // Clear any highlighted move hints.
     setSelectedSquare(null);
     setHighlightedSquares({});
 
@@ -166,10 +147,10 @@ function App() {
       promotion: 'q'
     });
 
-    if (move === null) return false; // Illegal move
+    if (move === null) return false;
 
     setChessGame(gameCopy);
-    setMoveHistory(prev => [...prev, move]);
+    setMoveHistory((prev) => [...prev, move]);
     updateCapturedPieces(move);
     updateGameStatus(gameCopy);
 
@@ -180,22 +161,16 @@ function App() {
     return true;
   }
 
-  // handleSquareClick handles tap/click based moves.
   const handleSquareClick = (square) => {
-    // If there's already a selected square, try to make a move.
     if (selectedSquare) {
-      // If clicking the same square, deselect.
       if (selectedSquare === square) {
         setSelectedSquare(null);
         setHighlightedSquares({});
         return;
       }
-
-      // Check if the move from selectedSquare to this square is valid.
       const moves = chessGame.moves({ square: selectedSquare, verbose: true });
       const validMove = moves.find((m) => m.to === square);
       if (validMove) {
-        // Execute the move.
         const gameCopy = new Chess(chessGame.fen());
         const move = gameCopy.move({
           from: selectedSquare,
@@ -204,7 +179,7 @@ function App() {
         });
         if (move) {
           setChessGame(gameCopy);
-          setMoveHistory(prev => [...prev, move]);
+          setMoveHistory((prev) => [...prev, move]);
           updateCapturedPieces(move);
           updateGameStatus(gameCopy);
           if (socketRef.current && gameId) {
@@ -215,19 +190,16 @@ function App() {
         setHighlightedSquares({});
         return;
       } else {
-        // If not a valid move, check if the tapped square has one of your pieces.
         const piece = chessGame.get(square);
         if (piece && piece.color === playerColor) {
           setSelectedSquare(square);
           highlightMoves(square);
           return;
         }
-        // Otherwise, clear selection.
         setSelectedSquare(null);
         setHighlightedSquares({});
       }
     } else {
-      // No square is selected yet. If the tapped square has one of your pieces, select it.
       const piece = chessGame.get(square);
       if (piece && piece.color === playerColor) {
         setSelectedSquare(square);
@@ -236,7 +208,6 @@ function App() {
     }
   };
 
-  // highlightMoves builds and sets highlightedSquares for a given square.
   const highlightMoves = (square) => {
     const moves = chessGame.moves({ square, verbose: true });
     if (moves.length === 0) {
@@ -244,8 +215,7 @@ function App() {
       return;
     }
     const newHighlights = {};
-    moves.forEach(move => {
-      // If the move captures a piece, show a red gradient.
+    moves.forEach((move) => {
       if (move.captured) {
         newHighlights[move.to] = {
           background: 'radial-gradient(circle, rgba(255,0,0,0.4) 36%, transparent 40%)',
@@ -258,12 +228,10 @@ function App() {
         };
       }
     });
-    // Highlight the selected square itself.
     newHighlights[square] = { backgroundColor: 'rgba(0,255,0,0.4)' };
     setHighlightedSquares(newHighlights);
   };
 
-  // Reset the game to its initial state.
   function resetGame() {
     const newGame = new Chess();
     setChessGame(newGame);
@@ -274,7 +242,6 @@ function App() {
     updateGameStatus(newGame);
   }
 
-  // Lobby: Create game handler.
   const handleCreateGame = (color) => {
     if (socketRef.current) {
       socketRef.current.emit('createGame', color);
@@ -282,7 +249,6 @@ function App() {
     }
   };
 
-  // Lobby: Join game handler.
   const handleJoinGame = () => {
     if (!lobbyGameKey.trim()) return;
     if (socketRef.current) {
@@ -290,20 +256,24 @@ function App() {
     }
   };
 
-  // Render captured pieces using Unicode symbols.
   const renderCapturedPieces = (color) => {
     return capturedPieces[color].map((piece, idx) => (
       <span key={`${piece}-${idx}`} className="text-2xl">
-        {piece === 'p' ? '♟' : 
-         piece === 'n' ? '♞' :
-         piece === 'b' ? '♝' :
-         piece === 'r' ? '♜' :
-         piece === 'q' ? '♛' : ''}
+        {piece === 'p'
+          ? '♟'
+          : piece === 'n'
+          ? '♞'
+          : piece === 'b'
+          ? '♝'
+          : piece === 'r'
+          ? '♜'
+          : piece === 'q'
+          ? '♛'
+          : ''}
       </span>
     ));
   };
 
-  // --- Lobby View ---
   if (inLobby) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
@@ -324,39 +294,36 @@ function App() {
           </button>
         </div>
         {gameId && (
-  <div className="mb-4">
-    <p className="text-lg">Share this Game Key with your opponent:</p>
-    <div className="flex items-center">
-      <span className="font-mono text-xl text-gray-700 mr-2">{gameId}</span>
-      <button
-        onClick={() => {
-          navigator.clipboard.writeText(gameId);
-          // Optional: provide feedback to the user
-          alert("Game key copied to clipboard!");
-        }}
-        className="flex items-center justify-center p-1 rounded hover:bg-gray-200"
-        title="Copy Game Key"
-      >
-        {/* Copy Icon */}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-blue-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 7V3m0 0h8a2 2 0 012 2v4m0 0v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9m12 0H8"
-          />
-        </svg>
-      </button>
-    </div>
-  </div>
-)}
-
+          <div className="mb-4">
+            <p className="text-lg">Share this Game Key with your opponent:</p>
+            <div className="flex items-center">
+              <span className="font-mono text-xl text-gray-700 mr-2">{gameId}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(gameId);
+                  alert('Game key copied to clipboard!');
+                }}
+                className="flex items-center justify-center p-1 rounded hover:bg-gray-200"
+                title="Copy Game Key"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-blue-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7V3m0 0h8a2 2 0 012 2v4m0 0v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9m12 0H8"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col items-center">
           <input
             type="text"
@@ -377,23 +344,16 @@ function App() {
     );
   }
 
-  // --- Game View ---
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
       <h1 className="text-4xl font-bold mb-6 text-gray-800">Chess.com</h1>
-      <div className="mb-4 text-lg font-semibold p-2 rounded">
-        {status}
-      </div>
-
-
-
-    {/* Mobile Move History Toggle */}
-    <div className="w-full md:hidden flex justify-center mb-4">
+      <div className="mb-4 text-lg font-semibold p-2 rounded">{status}</div>
+      <div className="w-full md:hidden flex justify-center mb-4">
         <button
           onClick={() => setShowHistory(!showHistory)}
           className="px-4 py-2 bg-indigo-500 text-white rounded shadow hover:bg-indigo-600 transition-colors"
         >
-          {showHistory ? "Hide Move History" : "Show Move History"}
+          {showHistory ? 'Hide Move History' : 'Show Move History'}
         </button>
       </div>
       {showHistory && (
@@ -411,10 +371,7 @@ function App() {
           </div>
         </div>
       )}
-
-
       <div className="flex gap-8">
-        {/* Sidebar: Move History */}
         <div className="bg-white shadow-lg rounded-lg p-4 w-48">
           <h2 className="text-lg font-semibold mb-2">Move History</h2>
           <div className="h-96 overflow-y-auto">
@@ -426,7 +383,6 @@ function App() {
             ))}
           </div>
         </div>
-        {/* Main Board */}
         <div className="bg-white shadow-lg rounded-lg p-6">
           <Chessboard
             position={chessGame.fen()}
@@ -435,10 +391,9 @@ function App() {
             boardWidth={500}
             boardOrientation={playerColor === 'w' ? 'white' : 'black'}
             customSquareStyles={highlightedSquares}
-            darkSquareStyle={{ backgroundColor: "#B58863" }}
-            lightSquareStyle={{ backgroundColor: "#F0D9B5" }}
+            darkSquareStyle={{ backgroundColor: '#B58863' }}
+            lightSquareStyle={{ backgroundColor: '#F0D9B5' }}
           />
-          {/* Captured pieces display */}
           <div className="mt-4 flex justify-between">
             <div className="text-black">White captures: {renderCapturedPieces('w')}</div>
             <div className="text-black">Black captures: {renderCapturedPieces('b')}</div>
@@ -456,5 +411,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
